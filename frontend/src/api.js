@@ -43,6 +43,36 @@ export async function fetchSelections() {
   return res.json();
 }
 
+export async function fetchTodoDetail(projectId, todoId) {
+  const res = await fetch(`${API}/api/projects/${projectId}/todos/${todoId}`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Failed to fetch todo detail");
+  return res.json();
+}
+
+export async function completeTodo(projectId, todoId) {
+  const res = await fetch(
+    `${API}/api/projects/${projectId}/todos/${todoId}/complete`,
+    { method: "POST", credentials: "include" }
+  );
+  if (!res.ok) throw new Error("Failed to complete todo");
+  return res.json();
+}
+
+export async function uncompleteTodo(projectId, todoId) {
+  const res = await fetch(
+    `${API}/api/projects/${projectId}/todos/${todoId}/uncomplete`,
+    { method: "POST", credentials: "include" }
+  );
+  if (!res.ok) throw new Error("Failed to uncomplete todo");
+  return res.json();
+}
+
+export async function logout() {
+  await fetch(`${API}/auth/logout`, { method: "POST", credentials: "include" });
+}
+
 export function loginUrl() {
   return `${API}/auth/login`;
 }

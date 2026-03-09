@@ -10,14 +10,14 @@ from fastapi import FastAPI, Request, Response, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import RedirectResponse
 
-from auth import (
+from backend.auth import (
     get_authorization_url,
     exchange_code,
     refresh_access_token,
     SESSION_COOKIE,
 )
-from database import init_db, get_db, DB
-from basecamp import BasecampClient
+from backend.database import init_db, get_db, DB
+from backend.basecamp import BasecampClient
 
 
 @asynccontextmanager
@@ -28,7 +28,7 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Basecamp Calendar", lifespan=lifespan)
 
-FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
 
 app.add_middleware(
     CORSMiddleware,
@@ -79,9 +79,15 @@ def callback(code: str, response: Response, db: DB = Depends(get_db)):
     account = client.pick_account(identity)
     client.account_id = account["id"]
 
+    name = (
+        identity.get("name")
+        or f'{identity.get("first_name", "")} {identity.get("last_name", "")}'.strip()
+        or identity.get("email_address", "")
+    )
+
     session_id = db.upsert_user(
         basecamp_id=identity["id"],
-        name=identity.get("name", ""),
+        name=name,
         email=identity.get("email_address", ""),
         account_id=account["id"],
         account_href=account["href"],
@@ -154,9 +160,11 @@ async def calendar_todos(
         todos = client.get_todos(sel["project_id"], sel["todolist_id"])
         for t in todos:
             if t.get("due_on"):
+                starts = t.get("starts_on") or t["due_on"]
                 all_todos.append({
                     "id": t["id"],
                     "title": t["title"],
+                    "starts_on": starts,
                     "due_on": t["due_on"],
                     "completed": t["completed"],
                     "project_id": sel["project_id"],
@@ -166,6 +174,61 @@ async def calendar_todos(
                     "url": t.get("app_url", ""),
                 })
     return all_todos
+
+
+@app.get("/api/projects/{project_id}/todos/{todo_id}")
+async def get_todo_detail(
+    project_id: int,
+    todo_id: int,
+    client: BasecampClient = Depends(bc_client),
+):
+    """Get full todo details including description and comments."""
+    todo = client.get_todo(project_id, todo_id)
+    return {
+        "id": todo["id"],
+        "title": todo["title"],
+        "description": todo.get("description", ""),
+        "due_on": todo.get("due_on"),
+        "completed": todo.get("completed", False),
+        "completed_at": todo.get("completed_at"),
+        "creator": todo.get("creator", {}).get("name", ""),
+        "assignees": [
+            {"name": a["name"], "avatar": a.get("avatar_url", "")}
+            for a in todo.get("assignees", [])
+        ],
+        "url": todo.get("app_url", ""),
+        "created_at": todo.get("created_at"),
+        "updated_at": todo.get("updated_at"),
+        "comments": [
+            {
+                "id": c["id"],
+                "content": c.get("content", ""),
+                "creator": c.get("creator", {}).get("name", ""),
+                "created_at": c.get("created_at"),
+            }
+            for c in todo.get("comments", [])
+        ],
+    }
+
+
+@app.post("/api/projects/{project_id}/todos/{todo_id}/complete")
+async def complete_todo(
+    project_id: int,
+    todo_id: int,
+    client: BasecampClient = Depends(bc_client),
+):
+    client.complete_todo(project_id, todo_id)
+    return {"ok": True}
+
+
+@app.post("/api/projects/{project_id}/todos/{todo_id}/uncomplete")
+async def uncomplete_todo(
+    project_id: int,
+    todo_id: int,
+    client: BasecampClient = Depends(bc_client),
+):
+    client.uncomplete_todo(project_id, todo_id)
+    return {"ok": True}
 
 
 @app.post("/api/selections")

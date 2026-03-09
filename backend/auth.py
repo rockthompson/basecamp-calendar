@@ -7,7 +7,7 @@ import requests
 
 CLIENT_ID = os.environ["BASECAMP_CLIENT_ID"]
 CLIENT_SECRET = os.environ["BASECAMP_CLIENT_SECRET"]
-REDIRECT_URI = os.getenv("BASECAMP_REDIRECT_URI", "http://localhost:8000/auth/callback")
+REDIRECT_URI = os.getenv("BASECAMP_REDIRECT_URI", "http://localhost:3000/auth/callback")
 
 SESSION_COOKIE = "bc_session"
 

@@ -79,5 +79,28 @@ class BasecampClient:
         return self._get_paginated(todolists_url)
 
     def get_todos(self, project_id: int, todolist_id: int) -> list:
-        url = f"{self.base_url}/buckets/{project_id}/todolists/{todolist_id}/todos.json"
-        return self._get_paginated(url)
+        base = f"{self.base_url}/buckets/{project_id}/todolists/{todolist_id}/todos.json"
+        incomplete = self._get_paginated(base)
+        completed = self._get_paginated(f"{base}?completed=true")
+        return incomplete + completed
+
+    def get_todo(self, project_id: int, todo_id: int) -> dict:
+        url = f"{self.base_url}/buckets/{project_id}/todos/{todo_id}.json"
+        data = self._get(url)
+        # Fetch comments if available
+        comments = []
+        comments_url = data.get("comments_url")
+        if comments_url:
+            comments = self._get_paginated(comments_url)
+        data["comments"] = comments
+        return data
+
+    def complete_todo(self, project_id: int, todo_id: int):
+        url = f"{self.base_url}/buckets/{project_id}/todos/{todo_id}/completion.json"
+        resp = self.session.post(url)
+        resp.raise_for_status()
+
+    def uncomplete_todo(self, project_id: int, todo_id: int):
+        url = f"{self.base_url}/buckets/{project_id}/todos/{todo_id}/completion.json"
+        resp = self.session.delete(url)
+        resp.raise_for_status()

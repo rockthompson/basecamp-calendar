@@ -3,8 +3,8 @@ import { fetchProjects, fetchTodolists, saveSelections } from "../api";
 
 export default function TodoListPicker({ selections, onSave }) {
   const [projects, setProjects] = useState([]);
-  const [expanded, setExpanded] = useState(null); // project id
-  const [todolists, setTodolists] = useState({}); // { projectId: [...] }
+  const [expanded, setExpanded] = useState(null);
+  const [todolists, setTodolists] = useState({});
   const [selected, setSelected] = useState(() => {
     const map = {};
     for (const s of selections) {
@@ -54,6 +54,12 @@ export default function TodoListPicker({ selections, onSave }) {
     });
   }
 
+  function selectedCountForProject(projectId) {
+    return Object.keys(selected).filter((k) =>
+      k.startsWith(`${projectId}-`)
+    ).length;
+  }
+
   async function handleSave() {
     setSaving(true);
     const list = Object.values(selected);
@@ -62,64 +68,89 @@ export default function TodoListPicker({ selections, onSave }) {
     onSave(list);
   }
 
-  if (loadingProjects) return <div className="loading">Loading projects...</div>;
+  const totalSelected = Object.keys(selected).length;
+
+  if (loadingProjects) return <div className="loading">Loading projects</div>;
 
   return (
     <div className="picker">
-      <h2>Select To-Do Lists to Track</h2>
-      <p className="picker-hint">
-        Pick the to-do lists that contain your communication tasks (emails,
-        social posts, etc). Expand a project to see its lists.
-      </p>
-
-      <div className="project-list">
-        {projects.map((p) => (
-          <div key={p.id} className="project-item">
-            <button
-              className="project-header"
-              onClick={() => toggleProject(p)}
-            >
-              <span className="expand-icon">
-                {expanded === p.id ? "▼" : "▶"}
-              </span>
-              {p.name}
-            </button>
-
-            {expanded === p.id && (
-              <div className="todolist-list">
-                {loadingLists ? (
-                  <div className="loading-small">Loading lists...</div>
-                ) : (
-                  (todolists[p.id] || []).map((tl) => {
-                    const key = `${p.id}-${tl.id}`;
-                    return (
-                      <label key={tl.id} className="todolist-item">
-                        <input
-                          type="checkbox"
-                          checked={!!selected[key]}
-                          onChange={() => toggleSelection(p, tl)}
-                        />
-                        {tl.title}
-                      </label>
-                    );
-                  })
-                )}
-                {!loadingLists && (todolists[p.id] || []).length === 0 && (
-                  <div className="empty">No to-do lists in this project</div>
-                )}
-              </div>
-            )}
-          </div>
-        ))}
+      <div className="picker-header">
+        <h2>Select To-Do Lists</h2>
+        <p className="picker-hint">
+          Choose which to-do lists to show on your calendar. Expand a project to
+          see its lists.
+        </p>
       </div>
 
-      <button
-        className="btn btn-primary save-btn"
-        onClick={handleSave}
-        disabled={saving || Object.keys(selected).length === 0}
-      >
-        {saving ? "Saving..." : `Save (${Object.keys(selected).length} selected)`}
-      </button>
+      <div className="project-list">
+        {projects.map((p) => {
+          const count = selectedCountForProject(p.id);
+          const isExpanded = expanded === p.id;
+
+          return (
+            <div
+              key={p.id}
+              className={`project-item${isExpanded ? " expanded" : ""}`}
+            >
+              <button
+                className="project-header"
+                onClick={() => toggleProject(p)}
+              >
+                <span className="expand-icon">
+                  {isExpanded ? "−" : "+"}
+                </span>
+                {p.name}
+                {count > 0 && (
+                  <span className="project-count has-selected">
+                    {count} selected
+                  </span>
+                )}
+              </button>
+
+              {isExpanded && (
+                <div className="todolist-list">
+                  {loadingLists ? (
+                    <div className="loading-small">Loading lists</div>
+                  ) : (
+                    (todolists[p.id] || []).map((tl) => {
+                      const key = `${p.id}-${tl.id}`;
+                      return (
+                        <label key={tl.id} className="todolist-item">
+                          <input
+                            type="checkbox"
+                            checked={!!selected[key]}
+                            onChange={() => toggleSelection(p, tl)}
+                          />
+                          {tl.title}
+                        </label>
+                      );
+                    })
+                  )}
+                  {!loadingLists && (todolists[p.id] || []).length === 0 && (
+                    <div className="empty">No to-do lists in this project</div>
+                  )}
+                </div>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      {totalSelected > 0 && (
+        <div className="save-bar">
+          <span className="selection-count">
+            <strong>{totalSelected}</strong> list{totalSelected !== 1 ? "s" : ""}{" "}
+            selected
+          </span>
+          <button
+            className="btn btn-primary"
+            onClick={handleSave}
+            disabled={saving}
+          >
+            {saving ? "Saving..." : "Save & View Calendar"}
+          </button>
+        </div>
+      )}
     </div>
   );
 }
