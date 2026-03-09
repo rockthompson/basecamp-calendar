@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+*.db
+tokens.json
+.env
+node_modules/
+dist/
+exchange_token.py

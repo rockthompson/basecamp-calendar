@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: basecamp-calendar-api
+    runtime: python
+    buildCommand: pip install -r backend/requirements.txt
+    startCommand: uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: BASECAMP_CLIENT_ID
+        sync: false
+      - key: BASECAMP_CLIENT_SECRET
+        sync: false
+      - key: BASECAMP_REDIRECT_URI
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+
+  - type: web
+    name: basecamp-calendar-ui
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
