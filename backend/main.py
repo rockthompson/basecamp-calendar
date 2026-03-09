@@ -4,11 +4,13 @@ Handles OAuth, per-user token storage, and Basecamp API proxying.
 """
 
 import os
+from pathlib import Path
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request, Response, HTTPException, Depends
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import RedirectResponse
+from fastapi.responses import RedirectResponse, FileResponse
+from fastapi.staticfiles import StaticFiles
 
 from backend.auth import (
     get_authorization_url,
@@ -29,10 +31,15 @@ async def lifespan(app: FastAPI):
 app = FastAPI(title="Basecamp Calendar", lifespan=lifespan)
 
 FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:3000")
+RAILWAY_URL = os.getenv("RAILWAY_PUBLIC_DOMAIN", "")
+
+origins = [FRONTEND_URL]
+if RAILWAY_URL:
+    origins.append(f"https://{RAILWAY_URL}")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[FRONTEND_URL],
+    allow_origins=origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -96,12 +103,13 @@ def callback(code: str, response: Response, db: DB = Depends(get_db)):
         expires_in=token_data.get("expires_in", 1209600),
     )
 
-    resp = RedirectResponse(f"{FRONTEND_URL}/")
+    redirect_to = f"https://{RAILWAY_URL}/" if RAILWAY_URL else f"{FRONTEND_URL}/"
+    resp = RedirectResponse(redirect_to)
     resp.set_cookie(
         SESSION_COOKIE,
         session_id,
         httponly=True,
-        secure=os.getenv("RENDER", False),
+        secure=bool(os.getenv("RENDER") or RAILWAY_URL),
         samesite="lax",
         max_age=60 * 60 * 24 * 30,  # 30 days
     )
@@ -250,3 +258,19 @@ async def get_selections(
 ):
     user = current_user(request, db)
     return db.get_selections(user["id"])
+
+
+# --------------- static frontend (production) ---------------
+
+STATIC_DIR = Path(__file__).resolve().parent.parent / "frontend" / "dist"
+
+if STATIC_DIR.is_dir():
+    app.mount("/assets", StaticFiles(directory=STATIC_DIR / "assets"), name="assets")
+
+    @app.get("/{full_path:path}")
+    async def serve_frontend(full_path: str):
+        """Serve the React SPA for any non-API route."""
+        file = STATIC_DIR / full_path
+        if file.is_file():
+            return FileResponse(file)
+        return FileResponse(STATIC_DIR / "index.html")
